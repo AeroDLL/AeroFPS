@@ -7,38 +7,39 @@ import subprocess
 import psutil
 from colorama import Fore
 
-# Popüler oyunlar listesi
-POPULAR_GAMES = [
-    "csgo.exe", "cs2.exe", "valorant.exe", "valorant-win64-shipping.exe",
-    "fortniteclient-win64-shipping.exe", "apexlegends.exe", "r5apex.exe",
-    "league of legends.exe", "leagueclient.exe", "overwatch.exe",
-    "cod.exe", "modernwarfare.exe", "warzone.exe", "gta5.exe",
-    "pubg.exe", "tslgame.exe", "rainbow6.exe", "r6s.exe",
-    "dota2.exe", "minecraft.exe", "javaw.exe", "rocketleague.exe"
-]
-
-# Kapatılacak gereksiz process'ler
-BACKGROUND_APPS = [
-    "discord.exe", "spotify.exe", "chrome.exe", "msedge.exe",
-    "steam.exe", "epicgameslauncher.exe", "origin.exe",
-    "skype.exe", "teams.exe", "onedrive.exe"
-]
+# Import constants
+try:
+    from .constants import POPULAR_GAMES, BACKGROUND_APPS, PROCESS_WAIT_TIMEOUT
+except ImportError:
+    # Fallback values
+    PROCESS_WAIT_TIMEOUT = 3
+    POPULAR_GAMES = [
+        "csgo.exe", "cs2.exe", "valorant.exe", "valorant-win64-shipping.exe",
+        "fortniteclient-win64-shipping.exe", "apexlegends.exe", "r5apex.exe",
+        "league of legends.exe", "leagueclient.exe", "overwatch.exe",
+        "cod.exe", "modernwarfare.exe", "warzone.exe", "gta5.exe",
+        "pubg.exe", "tslgame.exe", "rainbow6.exe", "r6s.exe",
+        "dota2.exe", "minecraft.exe", "javaw.exe", "rocketleague.exe"
+    ]
+    BACKGROUND_APPS = [
+        "discord.exe", "spotify.exe", "chrome.exe", "msedge.exe",
+        "steam.exe", "epicgameslauncher.exe", "origin.exe",
+        "skype.exe", "teams.exe", "onedrive.exe"
+    ]
 
 def get_running_games():
-    """Çalışan oyunları tespit et"""
-    running_games = []
+    """Çalışan oyunları tespit et (generator)"""
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             proc_name = proc.info['name'].lower()
             if proc_name in [g.lower() for g in POPULAR_GAMES]:
-                running_games.append({
+                yield {
                     'name': proc.info['name'],
                     'pid': proc.info['pid']
-                })
+                }
     except Exception as e:
         print(f"❌ Hata: {e}")
-    
-    return running_games
+        return
 
 def set_high_priority(pid):
     """Process'e yüksek öncelik ver"""
@@ -64,7 +65,7 @@ def boost_game_priority():
     """Çalışan oyunları boost et"""
     print(Fore.YELLOW + "\n🎮 Çalışan Oyunlar Taranıyor...\n")
     
-    games = get_running_games()
+    games = list(get_running_games())
     
     if not games:
         print(Fore.RED + "❌ Aktif oyun bulunamadı.")
@@ -83,28 +84,52 @@ def boost_game_priority():
     print(Fore.GREEN + f"\n✅ İşlem tamamlandı!")
 
 def kill_background_apps():
-    """Gereksiz arka plan uygulamalarını kapat"""
+    """Gereksiz arka plan uygulamalarını kapat (güçlü exception handling ile)"""
     print(Fore.YELLOW + "\n🔥 Arka Plan Uygulamaları Taranıyor...\n")
-    
+
     killed = 0
-    
+    errors = 0
+
     for proc in psutil.process_iter(['pid', 'name']):
         try:
             proc_name = proc.info['name'].lower()
             if proc_name in [a.lower() for a in BACKGROUND_APPS]:
                 print(Fore.YELLOW + f"   • {proc.info['name']} kapatılıyor...")
                 proc.terminate()
-                killed += 1
-                print(Fore.GREEN + f"     ✓ Kapatıldı")
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+
+                # Process'in gerçekten kapandığını kontrol et
+                try:
+                    proc.wait(timeout=PROCESS_WAIT_TIMEOUT)  # Süreyi bekle
+                    killed += 1
+                    print(Fore.GREEN + f"     ✓ Kapatıldı")
+                except psutil.TimeoutExpired:
+                    # Force kill dene
+                    try:
+                        proc.kill()
+                        killed += 1
+                        print(Fore.GREEN + f"     ✓ Force kapatıldı")
+                    except:
+                        print(Fore.RED + f"     ✗ Kapatılamadı")
+                        errors += 1
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # Bu normal exception'lar, devam et
             continue
         except Exception as e:
-            print(Fore.RED + f"     ✗ Hata: {e}")
-    
+            print(Fore.RED + f"     ✗ Beklenmeyen hata: {e}")
+            errors += 1
+
     if killed > 0:
         print(Fore.GREEN + f"\n✅ {killed} uygulama kapatıldı!")
+        from .logger import log_success
+        log_success(f"{killed} arka plan uygulaması kapatıldı")
     else:
         print(Fore.CYAN + "\n💡 Kapatılacak gereksiz uygulama bulunamadı.")
+
+    if errors > 0:
+        print(Fore.YELLOW + f"⚠️  {errors} uygulama kapatılırken hata oluştu.")
+        from .logger import log_warning
+        log_warning(f"{errors} process kapatılırken hata")
 
 def process_manager_menu():
     """Process Manager menüsü"""

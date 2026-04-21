@@ -6,6 +6,14 @@ WMIC deprecated olduğu için PowerShell alternatiflerini kullanır
 import subprocess
 import platform
 
+# Import constants
+try:
+    from .constants import TIMEOUT_SHORT, TIMEOUT_LONG, TIMEOUT_EXTRA_LONG
+except ImportError:
+    TIMEOUT_SHORT = 5
+    TIMEOUT_LONG = 30
+    TIMEOUT_EXTRA_LONG = 60
+
 def is_wmic_available():
     """WMIC komutunun kullanılabilir olup olmadığını kontrol et"""
     try:
@@ -14,27 +22,45 @@ def is_wmic_available():
             shell=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=2
+            timeout=TIMEOUT_SHORT
         )
         return result.returncode == 0
     except:
         return False
 
-def run_powershell(command, timeout=30):
-    """PowerShell komutu çalıştır"""
+def run_powershell(command, timeout=TIMEOUT_LONG):
+    """PowerShell komutu çalıştır (güvenli)"""
     try:
+        # Command validation - tehlikeli karakterleri kontrol et
+        if not command or not isinstance(command, str):
+            return None
+
+        # Tehlikeli karakterleri kontrol et (command injection önleme)
+        dangerous_chars = [';', '&', '|', '`', '$', '(', ')', '<', '>', '"', "'"]
+        for char in dangerous_chars:
+            if char in command and not command.count(char) == command.count(f'\\{char}'):  # Escape edilmiş değilse
+                from .logger import log_warning
+                log_warning(f"Güvenlik uyarısı: Tehlikeli karakter tespit edildi: {char}")
+                return None
+
         # PowerShell komutunu UTF-8 encoding ile çalıştır
         ps_command = f'powershell -NoProfile -ExecutionPolicy Bypass -Command "{command}"'
         result = subprocess.run(
             ps_command,
-            shell=True,
+            shell=True,  # PowerShell için gerekli
             capture_output=True,
             timeout=timeout,
             encoding='utf-8',
             errors='ignore'
         )
         return result.stdout if result.returncode == 0 else None
-    except:
+    except subprocess.TimeoutExpired:
+        from .logger import log_warning
+        log_warning(f"PowerShell komutu zaman aşımına uğradı: {command}")
+        return None
+    except Exception as e:
+        from .logger import log_error
+        log_error(f"PowerShell komut hatası: {command} - {e}")
         return None
 
 # Global değişken
@@ -121,7 +147,7 @@ def create_restore_point(description="AeroFPS_PRO_Backup"):
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=60
+                timeout=TIMEOUT_EXTRA_LONG
             )
             return result.returncode == 0
         except:
@@ -141,7 +167,7 @@ def set_process_priority(pid, priority="High"):
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                timeout=5
+                timeout=TIMEOUT_SHORT
             )
             return result.returncode == 0
         except:
@@ -161,7 +187,7 @@ def get_cpu_temperature():
                 shell=True,
                 encoding='utf-8',
                 errors='ignore',
-                timeout=5
+                timeout=TIMEOUT_SHORT
             )
             
             temps = []

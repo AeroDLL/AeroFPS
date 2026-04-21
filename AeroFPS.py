@@ -24,16 +24,45 @@ import webbrowser
 import platform
 from colorama import init, Fore, Style
 
-# İlk önce protection modülünü import et
+# Import constants
 try:
-    from protection import first_run_setup, show_watermark
-    from features.logger import log_info, log_success, log_error, log_warning, view_logs, clear_logs
-    from features.win_compat import create_restore_point, get_cpu_info, get_gpu_info, get_monitor_refresh_rate, get_startup_programs, WMIC_AVAILABLE
-except ImportError as e:
-    print(f"⚠️  Modül import hatası: {e}")
-    print("Lütfen tüm dosyaların doğru konumda olduğundan emin olun.")
-    input("Çıkmak için ENTER'a basın...")
-    sys.exit(1)
+    from features.constants import *
+except ImportError:
+    # Fallback values if constants not available
+    TIMEOUT_LONG = 30
+    BANNER_WIDTH = 70
+    CACHE_TIMEOUT = 300
+
+# Global command cache
+_command_cache = {}
+
+def cached_command(timeout_seconds=300):
+    """Command result caching decorator"""
+    def decorator(func):
+        def wrapper(cmd, *args, **kwargs):
+            cache_key = f"{func.__name__}:{hash(str(cmd) + str(args) + str(kwargs))}"
+            current_time = time.time()
+
+            # Cache kontrolü
+            if cache_key in _command_cache:
+                cached_time, cached_result = _command_cache[cache_key]
+                if current_time - cached_time < timeout_seconds:
+                    return cached_result
+
+            # Yeni çalıştırma
+            result = func(cmd, *args, **kwargs)
+            _command_cache[cache_key] = (current_time, result)
+
+            # Cache boyutu kontrolü (max 100 entry)
+            if len(_command_cache) > 100:
+                # En eski entry'i sil
+                oldest_key = min(_command_cache.keys(),
+                               key=lambda k: _command_cache[k][0])
+                del _command_cache[oldest_key]
+
+            return result
+        return wrapper
+    return decorator
 
 # Renkleri Başlat
 init(autoreset=True)
@@ -107,16 +136,30 @@ def title(text):
     except:
         pass
 
-def run(cmd, timeout=30):
+@cached_command(timeout_seconds=CACHE_TIMEOUT)  # Config'den cache timeout
+def run(cmd, timeout=TIMEOUT_LONG, shell_safe=False):
     """
-    Komutu çalıştır (hata yönetimi ile)
+    Komutu çalıştır (güvenli hata yönetimi ile)
+    Args:
+        cmd: Komut string'i veya listesi
+        timeout: Zaman aşımı süresi
+        shell_safe: Shell gerekliyse True (çok dikkatli kullanılmalı)
     Returns: True if successful, False otherwise
     """
     try:
+        # Güvenlik kontrolü
+        if isinstance(cmd, str) and not shell_safe:
+            # String komutları listeye çevir (shell injection önleme)
+            import shlex
+            cmd = shlex.split(cmd)
+
+        # Shell kullanımı sadece gerçekten gerekli olduğunda
+        use_shell = shell_safe and isinstance(cmd, str)
+
         result = subprocess.run(
-            cmd, 
-            shell=True, 
-            stdout=subprocess.DEVNULL, 
+            cmd,
+            shell=use_shell,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=timeout
         )
@@ -128,29 +171,99 @@ def run(cmd, timeout=30):
         log_error(f"Komut hatası: {cmd} - {e}")
         return False
 
+def print_status(message, status_type='info'):
+    """Birleştirilmiş status print fonksiyonu"""
+    colors = {
+        'success': Fore.GREEN,
+        'error': Fore.RED,
+        'warning': Fore.YELLOW,
+        'info': Fore.CYAN
+    }
+    icons = {
+        'success': '✅',
+        'error': '❌',
+        'warning': '⚠️',
+        'info': 'ℹ️'
+    }
+
+    print(f"{colors[status_type]} {icons[status_type]} {message}")
+
+    # Debug mode'da ekstra loglama
+    if DEBUG_MODE and status_type == 'error':
+        import traceback
+        traceback.print_exc()
+
+    # Loglama
+    log_function = getattr(__import__('features.logger', fromlist=['logger']).logger, f"log_{status_type}", log_info)
+    log_function(message)
+
 def print_success(msg):
     """Başarı mesajı"""
-    print(Fore.GREEN + Style.BRIGHT + f" [OK] {msg}")
-    log_success(msg)
-
-def print_info(msg):
-    """Bilgi mesajı"""
-    print(Fore.YELLOW + f" [*] {msg}")
-    log_info(msg)
+    print_status(msg, 'success')
 
 def print_error(msg):
     """Hata mesajı"""
-    print(Fore.RED + f" [!] {msg}")
-    log_error(msg)
+    print_status(msg, 'error')
 
-def pause():
-    """Duraklatma"""
-    print()
-    input(Fore.CYAN + T(" Devam etmek icin Enter'a basin...", " Press Enter to continue..."))
+def print_info(msg):
+    """Bilgi mesajı"""
+    print_status(msg, 'info')
+
+def safe_reg_edit(key, value, data, reg_type="REG_DWORD", backup=True):
+    """
+    Registry'yi güvenli şekilde düzenle (backup ile)
+    Args:
+        key: Registry anahtarı
+        value: Değer adı
+        data: Veri
+        reg_type: Registry tipi
+        backup: Backup al
+    Returns: Başarı durumu
+    """
+    try:
+        # Input validation
+        if not key or not isinstance(key, str):
+            log_error("Geçersiz registry anahtarı")
+            return False
+
+        if not value or not isinstance(value, str):
+            log_error("Geçersiz registry değeri")
+            return False
+
+        # Tehlikeli karakter kontrolü
+        dangerous_chars = ['"', ';', '&', '|']
+        for char in dangerous_chars:
+            if char in key or char in value:
+                log_error(f"Registry anahtar/değerinde tehlikeli karakter: {char}")
+                return False
+
+        if backup:
+            # Backup al
+            backup_file = f"reg_backup_{hash(key + value) % 10000}.reg"
+            backup_cmd = f'reg export "{key}" "{backup_file}" /y'
+            if not run(backup_cmd, shell_safe=True):
+                log_warning(f"Registry backup alınamadı: {key}")
+            else:
+                log_info(f"Registry backup alındı: {backup_file}")
+
+        # Registry düzenle
+        reg_cmd = f'reg add "{key}" /v "{value}" /t {reg_type} /d {data} /f'
+        success = run(reg_cmd, shell_safe=True)
+
+        if success:
+            log_success(f"Registry güncellendi: {key}\\{value}")
+        else:
+            log_error(f"Registry güncelleme başarısız: {key}\\{value}")
+
+        return success
+
+    except Exception as e:
+        log_error(f"Registry düzenleme hatası: {e}")
+        return False
 
 # --- DİL SEÇİM EKRANI / LANGUAGE SELECTOR ---
 def select_language():
-    """Dil seçim ekranı"""
+    """Dil seçim ekranı (güvenli input ile)"""
     global LANGUAGE
     clear()
     print(Fore.CYAN + Style.BRIGHT + """
@@ -161,8 +274,37 @@ def select_language():
     print(Fore.WHITE + "  [1] 🇹🇷 Türkçe (Turkish)")
     print(Fore.WHITE + "  [2] 🇬🇧 English (Global)")
     print()
-    
-    choice = input(Fore.GREEN + "  Select / Secim (1-2): ")
+
+    while True:
+        try:
+            choice = input(Fore.GREEN + "  Select / Secim (1-2): ").strip()
+
+            # Input validation
+            if not choice:
+                print(Fore.RED + "  ❌ Lütfen bir seçim yapın (1-2)")
+                continue
+
+            if len(choice) > 1:
+                print(Fore.RED + "  ❌ Geçersiz giriş. Sadece 1 veya 2 girin")
+                continue
+
+            if not choice.isdigit():
+                print(Fore.RED + "  ❌ Sadece rakam girin")
+                continue
+
+            choice_num = int(choice)
+            if choice_num not in [1, 2]:
+                print(Fore.RED + "  ❌ Geçersiz seçim. 1 veya 2 girin")
+                continue
+
+            break
+        except KeyboardInterrupt:
+            print(Fore.RED + "\n  ❌ İşlem iptal edildi")
+            sys.exit(1)
+        except Exception as e:
+            log_error(f"Dil seçimi hatası: {e}")
+            print(Fore.RED + "  ❌ Hata oluştu, tekrar deneyin")
+
     if choice == '1':
         LANGUAGE = "TR"
         log_info("Dil: Türkçe seçildi")
@@ -254,18 +396,18 @@ def fps_boost():
     pause()
 
 def advanced_opt():
-    """Gelişmiş optimizasyonlar"""
+    """Gelişmiş optimizasyonlar (güvenli registry ile)"""
     title(T("Gelismis Ayarlar", "Advanced Tweaks"))
     print_info(T("SSD ve Ag Ayarlari Yapiliyor...", "Optimizing SSD and Network..."))
-    
+
     # SSD TRIM
     if run('fsutil behavior set disabledeletenotify 0'):
         print_success("SSD TRIM enabled")
-    
-    # Network Throttling
-    if run(r'reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v "NetworkThrottlingIndex" /t REG_DWORD /d 4294967295 /f'):
+
+    # Network Throttling (güvenli registry ile)
+    if safe_reg_edit(r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex", 4294967295):
         print_success("Network Throttling disabled")
-    
+
     print_success(T("Optimize Edildi!", "Optimized!"))
     pause()
 
@@ -305,23 +447,25 @@ def dns_optimizer():
         print_success(f"DNS {dns} OK!")
     elif c == '4':
         print("\n🌐 Cloudflare Ping:")
-        os.system("ping -n 4 1.1.1.1")
+        run("ping -n 4 1.1.1.1", shell_safe=True)  # Ping için shell gerekli
         print("\n🌐 Google Ping:")
-        os.system("ping -n 4 8.8.8.8")
+        run("ping -n 4 8.8.8.8", shell_safe=True)  # Ping için shell gerekli
     
     pause()
 
 def gpu_turbo():
-    """GPU optimizasyonu"""
+    """GPU optimizasyonu (güvenli registry ile)"""
     title("GPU Turbo")
     print_info(T("GPU Donanim Hizlandirma Aciliyor...", "Enabling Hardware GPU Scheduling..."))
-    
-    if run(r'reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "HwSchMode" /t REG_DWORD /d 2 /f'):
+
+    # GPU Hardware Scheduling
+    if safe_reg_edit(r"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2):
         print_success("GPU Hardware Scheduling enabled")
-    
-    if run(r'reg add "HKCU\SOFTWARE\Microsoft\GameBar" /v "AutoGameModeEnabled" /t REG_DWORD /d 1 /f'):
+
+    # Game Mode
+    if safe_reg_edit(r"HKCU\SOFTWARE\Microsoft\GameBar", "AutoGameModeEnabled", 1):
         print_success("Game Mode enabled")
-    
+
     print_success("GPU Optimized!")
     pause()
 
@@ -330,7 +474,7 @@ def system_analyze():
     title(T("Sistem Analizi", "System Analysis"))
     
     print(Fore.CYAN + "\n📊 SİSTEM BİLGİLERİ:\n")
-    os.system('systeminfo | findstr /C:"OS Name" /C:"Total Physical Memory" /C:"System Type"')
+    run('systeminfo | findstr /C:"OS Name" /C:"Total Physical Memory" /C:"System Type"', shell_safe=True)
     
     print(Fore.CYAN + "\n💻 CPU KULLANIMI:")
     cpu_info = get_cpu_info()
@@ -447,7 +591,68 @@ def network_repair():
     print_success(T("Ag Ayarlari Sifirlandi!", "Network Reset Done!"))
     pause()
 
-def privacy_shield():
+def monitoring_dashboard():
+    """Real-time monitoring dashboard"""
+    title(T("📊 Real-Time Monitoring", "📊 Real-Time Monitoring"))
+    try:
+        monitoring_dashboard.start_monitoring_dashboard()
+    except Exception as e:
+        print_error(f"Monitoring Dashboard Error: {e}")
+        pause()
+
+def cloud_backup_menu():
+    """Cloud backup menu"""
+    title(T("☁️ Cloud Backup & Sync", "☁️ Cloud Backup & Sync"))
+
+    while True:
+        print(Fore.CYAN + "\n  Cloud Backup Menüsü:")
+        print(Fore.WHITE + "  ──────────────────────")
+        print(Fore.WHITE + "  [1] " + T("Backup Oluştur", "Create Backup"))
+        print(Fore.WHITE + "  [2] " + T("Backup'tan Geri Yükle", "Restore from Backup"))
+        print(Fore.WHITE + "  [3] " + T("Backup'ları Listele", "List Backups"))
+        print(Fore.WHITE + "  [4] " + T("Backup Ayarları", "Backup Settings"))
+        print(Fore.WHITE + "  [0] " + T("Geri Dön", "Back"))
+
+        choice = input(Fore.GREEN + "  Seçim: ")
+
+        if choice == '1':
+            cloud_backup.create_backup()
+            pause()
+        elif choice == '2':
+            backups = cloud_backup.list_backups()
+            if backups:
+                print(Fore.CYAN + "\n  Geri yüklemek istediğiniz backup ID'sini girin:")
+                backup_id = input(Fore.GREEN + "  Backup ID: ").strip()
+                cloud_backup.restore_backup(backup_id)
+            pause()
+        elif choice == '3':
+            cloud_backup.list_backups()
+            pause()
+        elif choice == '4':
+            cloud_backup.configure_backup()
+            pause()
+        elif choice == '0':
+            break
+        else:
+            print_error(T("Geçersiz seçim!", "Invalid choice!"))
+
+def advanced_network_diagnostics():
+    """Advanced network diagnostics"""
+    title(T("🔍 Advanced Network Diagnostics", "🔍 Advanced Network Diagnostics"))
+    try:
+        network_optimizer.advanced_network_diagnostics()
+    except Exception as e:
+        print_error(f"Network Diagnostics Error: {e}")
+    pause()
+
+def train_ai_model():
+    """AI model training"""
+    title(T("🎯 AI Model Eğitimi", "🎯 AI Model Training"))
+    try:
+        smart_advisor.train_ai_model()
+    except Exception as e:
+        print_error(f"AI Training Error: {e}")
+    pause()
     """Gizlilik koruması"""
     title("Privacy Shield")
     print_info(T("Telemetri Engelleniyor...", "Blocking Telemetry..."))
@@ -620,6 +825,10 @@ def main():
         m28 = T("🤖 AKILLI ÖNERİ SİSTEMİ (YENİ)", "🤖 SMART ADVISOR (NEW)")
         m29 = T("🎨 OYUN AYAR ÖNERİLERİ (YENİ)", "🎨 GAME CONFIG OPTIMIZER (NEW)")
         m30 = T("⏰ ZAMANLANMIŞ OPTİMİZASYON (YENİ)", "⏰ SCHEDULED OPTIMIZATION (NEW)")
+        m31 = T("📊 REAL-TIME MONITORING (YENİ)", "📊 REAL-TIME MONITORING (NEW)")
+        m32 = T("☁️  CLOUD BACKUP & SYNC (YENİ)", "☁️  CLOUD BACKUP & SYNC (NEW)")
+        m33 = T("🔍 ADVANCED NETWORK DIAGNOSTICS (YENİ)", "🔍 ADVANCED NETWORK DIAGNOSTICS (NEW)")
+        m34 = T("🎯 AI MODEL EĞİTİMİ (YENİ)", "🎯 AI MODEL TRAINING (NEW)")
 
         print(Fore.WHITE + "  ╔════════════════════════════════════════════════════════════════════╗")
         print(Fore.WHITE + "  ║                      🎯 ANA MENÜ / MAIN MENU                        ║")
@@ -644,10 +853,14 @@ def main():
         print(Fore.WHITE + f"  [28] {m28}")
         print(Fore.WHITE + f"  [29] {m29}")
         print(Fore.WHITE + f"  [30] {m30}")
+        print(Fore.WHITE + f"  [31] {m31}")
+        print(Fore.WHITE + f"  [32] {m32}")
+        print(Fore.WHITE + f"  [33] {m33}")
+        print(Fore.WHITE + f"  [34] {m34}")
         
         print(Fore.CYAN + "\n  ═══════════════════════════════════════════════════════════════════")
         
-        secim = input(Fore.GREEN + f"  {T('Seçim', 'Choice')} (0-30): ")
+        secim = input(Fore.GREEN + f"  {T('Seçim', 'Choice')} (0-34): ")
 
         try:
             if secim == '0': one_click_optimize()
@@ -685,6 +898,10 @@ def main():
             elif secim == '28': smart_advisor()
             elif secim == '29': game_config_optimizer()
             elif secim == '30': scheduled_optimization()
+            elif secim == '31': monitoring_dashboard()
+            elif secim == '32': cloud_backup_menu()
+            elif secim == '33': advanced_network_diagnostics()
+            elif secim == '34': train_ai_model()
             else:
                 print_error(T("Geçersiz Seçim!", "Invalid Choice!"))
                 time.sleep(1)

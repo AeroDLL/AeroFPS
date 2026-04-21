@@ -11,6 +11,12 @@ import hashlib
 import os
 import sys
 
+# Import constants
+try:
+    from features.constants import BANNER_WIDTH
+except ImportError:
+    BANNER_WIDTH = 70
+
 # Anti-Piracy Watermark
 WATERMARK = """
 ╔═══════════════════════════════════════════════════════════════════╗
@@ -69,16 +75,16 @@ def first_run_setup():
     
     if not os.path.exists(first_run_file):
         show_watermark()
-        print("\n" + "="*70)
+        print("\n" + "="*BANNER_WIDTH)
         print("  İLK ÇALIŞTIRMA KURULUMU")
-        print("="*70)
+        print("="*BANNER_WIDTH)
         print("\nAeroFPS PRO'ya hoş geldiniz!")
         print("\nDevam etmeden önce lütfen lisans şartlarını okuyun:")
         input("\nDevam etmek için ENTER'a basın...")
         
         show_license()
         
-        print("\n" + "="*70)
+        print("\n" + "="*BANNER_WIDTH)
         choice = input("\nLisans şartlarını kabul ediyor musunuz? (E/H): ").strip().upper()
         
         if choice == 'E' or choice == 'Y':

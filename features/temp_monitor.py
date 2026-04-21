@@ -10,9 +10,11 @@ from colorama import Fore, Style
 # Win_compat import
 try:
     from .win_compat import get_cpu_temperature, get_cpu_load, get_memory_info, WMIC_AVAILABLE
+    from .constants import TEMP_COOL, TEMP_WARM, TEMP_HOT
 except (ImportError, ValueError):
     try:
         from win_compat import get_cpu_temperature, get_cpu_load, get_memory_info, WMIC_AVAILABLE
+        from constants import TEMP_COOL, TEMP_WARM, TEMP_HOT
     except ImportError:
         # Fallback - basit psutil kullan
         try:
@@ -28,6 +30,11 @@ except (ImportError, ValueError):
             get_cpu_temperature = lambda: None
             get_cpu_load = lambda: None
             get_memory_info = lambda: None
+        
+        # Fallback temperature constants
+        TEMP_COOL = 50
+        TEMP_WARM = 70
+        TEMP_HOT = 85
 
 def get_system_info():
     """Sistem bilgilerini al"""
@@ -71,11 +78,11 @@ def get_temp_color(temp):
     """Sıcaklığa göre renk döndür"""
     if temp is None:
         return Fore.WHITE
-    elif temp < 50:
+    elif temp < TEMP_COOL:
         return Fore.GREEN
-    elif temp < 70:
+    elif temp < TEMP_WARM:
         return Fore.YELLOW
-    elif temp < 85:
+    elif temp < TEMP_HOT:
         return Fore.RED
     else:
         return Fore.RED + Style.BRIGHT

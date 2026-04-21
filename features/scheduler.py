@@ -10,6 +10,12 @@ from datetime import datetime, timedelta
 from colorama import Fore, Style
 from .logger import log_info, log_success, log_error
 
+# Import constants
+try:
+    from .constants import TIMEOUT_LONG
+except ImportError:
+    TIMEOUT_LONG = 30
+
 SCHEDULE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "schedule.json")
 
 # Varsayılan görevler
@@ -65,31 +71,61 @@ def save_schedule(schedule):
         return False
 
 def create_windows_task(task_id, task_data):
-    """Windows Task Scheduler'da görev oluştur"""
+    """Windows Task Scheduler'da görev oluştur (güvenli)"""
     try:
-        task_name = f"AeroFPS_{task_id}"
+        # Input validation
+        if not task_id or not isinstance(task_id, str):
+            log_error("Geçersiz task_id")
+            return False
+
+        if not task_data or not isinstance(task_data, dict):
+            log_error("Geçersiz task_data")
+            return False
+
+        task_name = f"AeroFPS_{task_id.replace(' ', '_')}"  # Güvenli task name
         script_path = os.path.abspath(__file__).replace('scheduler.py', f'../AeroFPS.py')
-        
+
+        # Güvenlik kontrolü - script path'inin mevcut olduğundan emin ol
+        if not os.path.exists(script_path):
+            log_error(f"Script path bulunamadı: {script_path}")
+            return False
+
         # Görev türüne göre trigger
         if task_data.get('trigger') == 'startup':
             trigger = '/sc onstart'
         else:
             time = task_data.get('time', '03:00')
             days = ','.join(task_data.get('days', ['SUN']))
-            trigger = f'/sc weekly /d {days} /st {time}'
-        
-        # Task oluştur
-        cmd = f'schtasks /create /tn "{task_name}" /tr "python \\"{script_path}\\" --scheduled-task {task_id}" {trigger} /ru SYSTEM /rl HIGHEST /f'
-        
+            # Days validation
+            valid_days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+            safe_days = [d[:3].upper() for d in days.split(',') if d[:3].upper() in valid_days]
+            if not safe_days:
+                safe_days = ['SUN']
+            trigger = f'/sc weekly /d {",".join(safe_days)} /st {time}'
+
+        # Güvenli komut oluşturma
+        safe_script_path = f'"{script_path}"'  # Quote ile çevrele
+        cmd = f'schtasks /create /tn "{task_name}" /tr "python {safe_script_path} --scheduled-task {task_id}" {trigger} /ru SYSTEM /rl HIGHEST /f'
+
         result = subprocess.run(
             cmd,
-            shell=True,
+            shell=True,  # schtasks için gerekli
             capture_output=True,
             encoding='utf-8',
-            errors='ignore'
+            errors='ignore',
+            timeout=TIMEOUT_LONG
         )
-        
-        return result.returncode == 0
+
+        success = result.returncode == 0
+        if success:
+            log_success(f"Windows task oluşturuldu: {task_name}")
+        else:
+            log_error(f"Windows task oluşturma başarısız: {result.stderr}")
+
+        return success
+    except subprocess.TimeoutExpired:
+        log_error(f"Windows task oluşturma zaman aşımına uğradı: {task_id}")
+        return False
     except Exception as e:
         log_error(f"Windows task oluşturma hatası: {e}")
         return False

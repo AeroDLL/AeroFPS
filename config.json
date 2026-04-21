@@ -1,0 +1,11 @@
+{
+  "debug_mode": false,
+  "auto_update": true,
+  "backup_before_changes": true,
+  "aggressive_optimization": false,
+  "custom_game_servers": {},
+  "excluded_processes": [],
+  "log_level": "INFO",
+  "max_cache_size": 100,
+  "cache_timeout": 300
+}

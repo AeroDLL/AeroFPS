@@ -7,12 +7,20 @@ import subprocess
 import time
 from colorama import Fore, Style
 
-def run_silent(cmd):
-    """Komutu sessizce çalıştır"""
+def run_silent(cmd, shell_safe=False):
+    """Komutu sessizce çalıştır (güvenli)"""
     try:
-        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Güvenlik kontrolü
+        if isinstance(cmd, str) and not shell_safe:
+            import shlex
+            cmd = shlex.split(cmd)
+
+        use_shell = shell_safe and isinstance(cmd, str)
+        subprocess.run(cmd, shell=use_shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
-    except:
+    except Exception as e:
+        from .logger import log_error
+        log_error(f"Silent command failed: {cmd} - {e}")
         return False
 
 def print_progress(step, total, message):
