@@ -204,5 +204,5 @@ A: `[25] Sıfırla` seçeneğini kullanın veya sistem geri yükleme noktasında
 ---
 
 **Son Güncelleme:** 06.01.2026  
-**Versiyon:** PRO v1.0  
+**Versiyon:** PRO v1.1  
 **Durum:** Stabil ✅

@@ -9,6 +9,14 @@ import ssl
 import webbrowser
 from colorama import Fore, Style
 
+def _get_ssl_context():
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
 CURRENT_VERSION = "PRO v1.1"
 
 # Güncelleme kaynakları (öncelik sırasına göre)
@@ -25,58 +33,42 @@ UPDATE_SOURCES = [
     }
 ]
 
-MANUAL_CHECK_URL = "https://github.com/AeroDLL/AeroFPS/releases"
+MANUAL_CHECK_URL = "https://github.com/AeroDLL/AeroFPS/releases/latest"
 
 def try_github_api(url):
-    """GitHub API'den veri al"""
     try:
-        # SSL doğrulamasını atla (bazı sistemlerde sorun çıkarabiliyor)
-        context = ssl._create_unverified_context()
-        
-        req = urllib.request.Request(url)
-        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-        
-        with urllib.request.urlopen(req, timeout=10, context=context) as response:
+        ctx = _get_ssl_context()
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as response:
             data = json.loads(response.read().decode())
-        
-        return {
-            'version': data.get('tag_name', 'Unknown'),
-            'url': data.get('html_url', MANUAL_CHECK_URL),
-            'notes': data.get('body', 'Yayın notları yok.')
-        }
-    except:
+            return {
+                'version': data.get('tag_name', ''),
+                'url': data.get('html_url', ''),
+                'notes': data.get('body', '')
+            }
+    except Exception:
         return None
 
 def try_raw_json(url):
-    """Raw JSON dosyasından veri al"""
     try:
-        context = ssl._create_unverified_context()
-        req = urllib.request.Request(url)
-        req.add_header('User-Agent', 'Mozilla/5.0')
-        
-        with urllib.request.urlopen(req, timeout=10, context=context) as response:
+        ctx = _get_ssl_context()
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as response:
             data = json.loads(response.read().decode())
-        
-        return {
-            'version': data.get('version', 'Unknown'),
-            'url': data.get('download_url', MANUAL_CHECK_URL),
-            'notes': data.get('release_notes', 'Yayın notları yok.')
-        }
-    except:
+            return {
+                'version': data.get('version', ''),
+                'url': data.get('download_url', ''),
+                'notes': data.get('release_notes', '')
+            }
+    except Exception:
         return None
 
 def check_for_updates():
-    """Güncellemeleri kontrol et - çoklu kaynak desteği"""
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       GÜNCELLEME KONTROLÜ                      ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
-    
-    print(Fore.YELLOW + f"  📦 Mevcut Versiyon: {CURRENT_VERSION}\n")
-    print(Fore.WHITE + "  🔍 Güncelleme kontrol ediliyor...\n")
+    print(Fore.CYAN + "\n  🔄 Güncelleme Kontrolü Başlatılıyor...")
+    print(Fore.WHITE + "  " + "─" * 46)
     
     update_info = None
-    successful_source = None
+    successful_source = ""
     
     # Tüm kaynakları dene
     for source in UPDATE_SOURCES:
@@ -142,13 +134,6 @@ def check_for_updates():
         if choice == 'E':
             webbrowser.open(MANUAL_CHECK_URL)
             print(Fore.GREEN + "  ✅ Tarayıcı açıldı!")
-
-if __name__ == "__main__":
-    # Test
-    from colorama import init
-    init(autoreset=True)
-    check_for_updates()
-    input("\n\nDevam etmek için ENTER'a basın...")
 
 if __name__ == "__main__":
     # Test

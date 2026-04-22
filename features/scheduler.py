@@ -51,7 +51,7 @@ def load_schedule():
                 return json.load(f)
         else:
             return DEFAULT_TASKS.copy()
-    except:
+    except Exception as e:
         return DEFAULT_TASKS.copy()
 
 def save_schedule(schedule):
@@ -68,8 +68,9 @@ def create_windows_task(task_id, task_data):
     """Windows Task Scheduler'da görev oluştur"""
     try:
         task_name = f"AeroFPS_{task_id}"
-        script_path = os.path.abspath(__file__).replace('scheduler.py', f'../AeroFPS.py')
-        
+        from pathlib import Path
+        script_path = str(Path(__file__).parent.parent / "AeroFPS.py")
+
         # Görev türüne göre trigger
         if task_data.get('trigger') == 'startup':
             trigger = '/sc onstart'
@@ -108,7 +109,7 @@ def delete_windows_task(task_id):
         )
         
         return result.returncode == 0
-    except:
+    except Exception as e:
         return False
 
 def check_task_exists(task_id):
@@ -122,7 +123,7 @@ def check_task_exists(task_id):
             stderr=subprocess.DEVNULL
         )
         return result.returncode == 0
-    except:
+    except Exception as e:
         return False
 
 def execute_scheduled_task(task_id):
@@ -146,11 +147,9 @@ def execute_scheduled_task(task_id):
     elif task_id == 'pre_gaming':
         # Oyun öncesi hazırlık
         try:
-            import ctypes
-            psapi = ctypes.WinDLL('psapi.dll')
-            kernel = ctypes.WinDLL('kernel32.dll')
-            psapi.EmptyWorkingSet(kernel.GetCurrentProcess())
-        except:
+            from features.safe_runner import clean_all_ram
+            clean_all_ram()
+        except Exception as e:
             pass
         log_success("Oyun öncesi hazırlık tamamlandı")
     
@@ -163,10 +162,8 @@ def show_schedule_status():
     """Zamanlama durumunu göster"""
     schedule = load_schedule()
     
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       ZAMANLANMIŞ OPTİMİZASYON DURUMU          ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
+    from features.ui_utils import print_box
+    print_box("ZAMANLANMIŞ OPTİMİZASYON DURUMU")
     
     for task_id, task_data in schedule.items():
         enabled = task_data.get('enabled', False)
@@ -200,10 +197,8 @@ def configure_schedule():
     """Zamanlama yapılandırması"""
     schedule = load_schedule()
     
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       ZAMANLANMIŞ OPTİMİZASYON AYARLARI        ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
+    from features.ui_utils import print_box
+    print_box("ZAMANLANMIŞ OPTİMİZASYON AYARLARI")
     
     tasks_list = list(schedule.items())
     
@@ -266,14 +261,10 @@ def configure_schedule():
 
 def scheduler_menu():
     """Scheduler ana menü"""
-    from colorama import init
-    init(autoreset=True)
-    
+
     while True:
-        print(Fore.CYAN + Style.BRIGHT + "\n")
-        print("  ╔════════════════════════════════════════════════╗")
-        print("  ║       ZAMANLANMIŞ OPTİMİZASYON                 ║")
-        print("  ╚════════════════════════════════════════════════╝")
+        from features.ui_utils import print_box
+        print_box("ZAMANLANMIŞ OPTİMİZASYON")
         print(Fore.WHITE + "\n  [1] 📊 Zamanlama Durumunu Görüntüle")
         print(Fore.WHITE + "  [2] ⚙️  Görevleri Yapılandır")
         print(Fore.WHITE + "  [3] ▶️  Görevi Şimdi Çalıştır (Test)")

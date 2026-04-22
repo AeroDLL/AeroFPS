@@ -44,7 +44,7 @@ def ping_server(host, count=4):
                 'loss': count - len(pings)
             }
         return None
-    except:
+    except Exception as e:
         return None
 
 def get_ping_color(ping):
@@ -60,10 +60,8 @@ def get_ping_color(ping):
 
 def display_ping_monitor():
     """Gerçek zamanlı ping monitörü"""
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       NETWORK PING MONITOR                     ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
+    from features.ui_utils import print_box
+    print_box("NETWORK PING MONITOR")
     
     print(Fore.YELLOW + "  🌐 Oyun sunucuları test ediliyor...\n")
     print(Fore.WHITE + "  " + "─" * 60)
@@ -111,10 +109,8 @@ def display_ping_monitor():
 
 def apply_network_tweaks():
     """Gelişmiş network optimizasyonları"""
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       NETWORK OPTIMIZATION                     ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
+    from features.ui_utils import print_box
+    print_box("NETWORK OPTIMIZATION")
     
     print(Fore.YELLOW + "  ⚡ Network ayarları optimize ediliyor...\n")
     
@@ -173,7 +169,7 @@ def apply_network_tweaks():
                 log_success(f"Network tweak uygulandı: {tweak['name']}")
             else:
                 print(Fore.RED + "✗")
-        except:
+        except Exception as e:
             print(Fore.RED + "✗")
     
     print(Fore.WHITE + "\n  " + "─" * 60)
@@ -184,10 +180,8 @@ def apply_network_tweaks():
 
 def optimize_dns_for_gaming():
     """Oyun için en iyi DNS'i bul ve uygula"""
-    print(Fore.CYAN + Style.BRIGHT + "\n")
-    print("  ╔════════════════════════════════════════════════╗")
-    print("  ║       DNS OPTIMIZER FOR GAMING                 ║")
-    print("  ╚════════════════════════════════════════════════╝\n")
+    from features.ui_utils import print_box
+    print_box("DNS OPTIMIZER FOR GAMING")
     
     dns_providers = {
         'Cloudflare': ('1.1.1.1', '1.0.0.1'),
@@ -223,17 +217,8 @@ def optimize_dns_for_gaming():
             primary, secondary = dns_providers[best_dns]
             
             # Aktif adaptörleri al
-            try:
-                output = subprocess.check_output('netsh interface show interface', shell=True).decode()
-                adapters = []
-                for line in output.split('\n'):
-                    if 'Connected' in line or 'Bağlı' in line:
-                        parts = line.split()
-                        if len(parts) >= 4:
-                            adapter_name = ' '.join(parts[3:])
-                            adapters.append(adapter_name)
-            except:
-                adapters = ["Ethernet", "Wi-Fi"]
+            from features.network_utils import get_connected_adapters
+            adapters = get_connected_adapters()
             
             print(Fore.CYAN + "\n  Uygulanıyor...")
             
@@ -258,14 +243,10 @@ def optimize_dns_for_gaming():
 
 def network_optimizer_menu():
     """Network optimizer ana menü"""
-    from colorama import init
-    init(autoreset=True)
     
     while True:
-        print(Fore.CYAN + Style.BRIGHT + "\n")
-        print("  ╔════════════════════════════════════════════════╗")
-        print("  ║       NETWORK PING OPTIMIZER                   ║")
-        print("  ╚════════════════════════════════════════════════╝")
+        from features.ui_utils import print_box
+        print_box("NETWORK PING OPTIMIZER")
         print(Fore.WHITE + "\n  [1] 📊 Ping Monitör (Gerçek Zamanlı)")
         print(Fore.WHITE + "  [2] ⚡ Network Tweaks Uygula")
         print(Fore.WHITE + "  [3] 🌐 DNS Optimizer (Otomatik)")

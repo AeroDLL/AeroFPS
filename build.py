@@ -19,11 +19,21 @@ required_files = [
     "AeroFPS.py",
     "protection.py",
     "features/__init__.py",
-    "features/logger.py",
-    "features/process_manager.py",
-    "features/temp_monitor.py",
+    "features/abstraction.py",
     "features/auto_optimizer.py",
-    "features/updater.py"
+    "features/change_tracker.py",
+    "features/config_manager.py",
+    "features/game_config_optimizer.py",
+    "features/logger.py",
+    "features/network_optimizer.py",
+    "features/process_manager.py",
+    "features/safe_runner.py",
+    "features/scheduler.py",
+    "features/smart_advisor.py",
+    "features/state_manager.py",
+    "features/temp_monitor.py",
+    "features/updater.py",
+    "features/win_compat.py"
 ]
 
 print("📋 Dosya kontrolü yapılıyor...")

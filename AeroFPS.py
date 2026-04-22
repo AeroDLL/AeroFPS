@@ -1,6 +1,6 @@
 """
 ╔═══════════════════════════════════════════════════════════════════════╗
-║                        AeroFPS PRO v1.0                                ║
+║                        AeroFPS PRO v1.1                                ║
 ║              Ultimate Windows Gaming Optimization Suite                ║
 ║                                                                        ║
 ║  Copyright © 2026 AeroDLL | github.com/AeroDLL/AeroFPS                ║
@@ -38,13 +38,15 @@ except ImportError as e:
 # Renkleri Başlat
 init(autoreset=True)
 
-# --- GLOBAL DİL DEĞİŞKENİ ---
-LANGUAGE = "EN"  # Varsayılan / Default
+from features.state_manager import get_state_manager
+
 VERSION = "PRO v1.1"
 
 def T(tr_text, en_text):
     """Dil seçimine göre metin döndürür / Returns text based on language"""
-    if LANGUAGE == "TR":
+    state = get_state_manager()
+    lang = state.get('language', 'EN')
+    if lang == "TR":
         return tr_text
     else:
         return en_text
@@ -54,7 +56,7 @@ def is_admin():
     """Yönetici haklarını kontrol et"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
+    except Exception as e:
         return False
 
 def request_admin():
@@ -104,18 +106,20 @@ def title(text):
     """Konsol başlığını değiştir"""
     try:
         os.system(f'title AeroFPS PRO | {text}')
-    except:
+    except Exception as e:
         pass
 
-def run(cmd, timeout=30):
+def run(cmd, timeout=30, shell=True):
     """
     Komutu çalıştır (hata yönetimi ile)
     Returns: True if successful, False otherwise
     """
+    if isinstance(cmd, list):
+        shell = False
     try:
         result = subprocess.run(
             cmd, 
-            shell=True, 
+            shell=shell, 
             stdout=subprocess.DEVNULL, 
             stderr=subprocess.DEVNULL,
             timeout=timeout
@@ -151,23 +155,20 @@ def pause():
 # --- DİL SEÇİM EKRANI / LANGUAGE SELECTOR ---
 def select_language():
     """Dil seçim ekranı"""
-    global LANGUAGE
+    state = get_state_manager()
     clear()
-    print(Fore.CYAN + Style.BRIGHT + """
-    ╔════════════════════════════════════════════════╗
-    ║          LANGUAGE SELECTION / DİL SEÇİMİ       ║
-    ╚════════════════════════════════════════════════╝
-    """)
+    from features.ui_utils import print_box
+    print_box("LANGUAGE SELECTION / DİL SEÇİMİ")
     print(Fore.WHITE + "  [1] 🇹🇷 Türkçe (Turkish)")
     print(Fore.WHITE + "  [2] 🇬🇧 English (Global)")
     print()
     
     choice = input(Fore.GREEN + "  Select / Secim (1-2): ")
     if choice == '1':
-        LANGUAGE = "TR"
+        state.set('language', 'TR', track_history=True)
         log_info("Dil: Türkçe seçildi")
     else:
-        LANGUAGE = "EN"
+        state.set('language', 'EN', track_history=True)
         log_info("Language: English selected")
 
 # --- MENÜ TASARIMI / BANNER ---
@@ -186,7 +187,7 @@ def banner():
 ║                                                                        ║
 ╟────────────────────────────────────────────────────────────────────────╢
 ║                    🎮 ULTIMATE GAMING SUITE 🎮                        ║
-║                          PRO EDITION v1.0                              ║
+║                          PRO EDITION v1.1                              ║
 ╟────────────────────────────────────────────────────────────────────────╢
 ║  ⚡ FPS Boost  │  🧹 System Clean  │  🛡️  Privacy  │  🔥 Performance  ║
 ╚════════════════════════════════════════════════════════════════════════╝
@@ -274,17 +275,8 @@ def dns_optimizer():
     title("DNS Optimizer")
     
     # Aktif network adaptörlerini al
-    try:
-        output = subprocess.check_output('netsh interface show interface', shell=True).decode()
-        adapters = []
-        for line in output.split('\n'):
-            if 'Connected' in line or 'Bağlı' in line:
-                parts = line.split()
-                if len(parts) >= 4:
-                    adapter_name = ' '.join(parts[3:])
-                    adapters.append(adapter_name)
-    except:
-        adapters = ["Ethernet", "Wi-Fi"]
+    from features.network_utils import get_connected_adapters
+    adapters = get_connected_adapters()
     
     print(Fore.YELLOW + "\n [1] ☁️  Cloudflare (1.1.1.1 - Hızlı)")
     print(Fore.YELLOW + " [2] 🌐 Google (8.8.8.8 - Güvenilir)")
@@ -621,9 +613,8 @@ def main():
         m29 = T("🎨 OYUN AYAR ÖNERİLERİ (YENİ)", "🎨 GAME CONFIG OPTIMIZER (NEW)")
         m30 = T("⏰ ZAMANLANMIŞ OPTİMİZASYON (YENİ)", "⏰ SCHEDULED OPTIMIZATION (NEW)")
 
-        print(Fore.WHITE + "  ╔════════════════════════════════════════════════════════════════════╗")
-        print(Fore.WHITE + "  ║                      🎯 ANA MENÜ / MAIN MENU                        ║")
-        print(Fore.WHITE + "  ╚════════════════════════════════════════════════════════════════════╝\n")
+        from features.ui_utils import print_box
+        print_box("🎯 ANA MENÜ / MAIN MENU", width=68)
         
         print(Fore.CYAN + Style.BRIGHT + f"  {m1}")
         print(Fore.WHITE + "  ────────────────────────────────────────────────────────────────────")
@@ -700,7 +691,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        sys.exit(0)
     except Exception as e:
+        log_error(f"Global Error Boundary Caught Exception: {e}")
         print(Fore.RED + f"\n❌ Kritik Hata: {e}")
-        log_error(f"Kritik hata: {e}")
         input("\nÇıkmak için ENTER'a basın...")

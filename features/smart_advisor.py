@@ -35,7 +35,7 @@ def get_system_specs():
             specs['disk_type'] = 'SSD'
         elif 'HDD' in output:
             specs['disk_type'] = 'HDD'
-    except:
+    except Exception as e:
         pass
     
     # Başlangıç programları sayısı
@@ -47,7 +47,7 @@ def get_system_specs():
             errors='ignore'
         )
         specs['startup_programs'] = int(output.strip())
-    except:
+    except Exception as e:
         pass
     
     return specs
@@ -235,7 +235,7 @@ def apply_all_suggestions():
         try:
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
             print(Fore.GREEN + "✓")
-        except:
+        except Exception as e:
             print(Fore.RED + "✗")
     
     print(Fore.GREEN + "\n  ✅ Otomatik optimizasyon tamamlandı!")
@@ -247,12 +247,10 @@ def apply_high_priority_suggestions():
     # RAM temizliği
     print(Fore.CYAN + "  • RAM Temizliği                ", end='', flush=True)
     try:
-        import ctypes
-        psapi = ctypes.WinDLL('psapi.dll')
-        kernel = ctypes.WinDLL('kernel32.dll')
-        psapi.EmptyWorkingSet(kernel.GetCurrentProcess())
+        from features.safe_runner import clean_all_ram
+        clean_all_ram()
         print(Fore.GREEN + "✓")
-    except:
+    except Exception as e:
         print(Fore.RED + "✗")
     
     # Process önceliği
@@ -266,7 +264,7 @@ def apply_high_priority_suggestions():
             timeout=10
         )
         print(Fore.GREEN + "✓")
-    except:
+    except Exception as e:
         print(Fore.RED + "✗")
     
     print(Fore.GREEN + "\n  ✅ Yüksek öncelikli optimizasyonlar tamamlandı!")

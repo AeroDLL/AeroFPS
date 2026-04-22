@@ -59,7 +59,7 @@ def check_integrity():
             # Hash sabit tutulabilir ve kontrol edilebilir
             # Ancak her değişiklikte güncellemek gerekir
             return True
-    except:
+    except Exception as e:
         pass
     return True
 
@@ -88,7 +88,7 @@ def first_run_setup():
                     f.write(f"AeroFPS PRO kuruldu - {os.getlogin()}\n")
                 print("\n✅ Kurulum tamamlandı! Program başlatılıyor...\n")
                 return True
-            except:
+            except Exception as e:
                 print("\n✅ Devam ediliyor...\n")
                 return True
         else:

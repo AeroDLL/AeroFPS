@@ -23,7 +23,7 @@ except (ImportError, ValueError):
             def get_memory_info():
                 mem = psutil.virtual_memory()
                 return f"TotalVisibleMemorySize : {int(mem.total/1024)}\nFreePhysicalMemory : {int(mem.available/1024)}"
-        except:
+        except Exception as e:
             WMIC_AVAILABLE = False
             get_cpu_temperature = lambda: None
             get_cpu_load = lambda: None
@@ -48,18 +48,18 @@ def get_system_info():
                 if 'FreePhysicalMemory' in line or 'available' in line.lower():
                     try:
                         free_mem = float(line.split(':')[-1].strip()) / 1024  # MB
-                    except:
+                    except Exception as e:
                         pass
                 elif 'TotalVisibleMemorySize' in line or 'total' in line.lower():
                     try:
                         total_mem = float(line.split(':')[-1].strip()) / 1024  # MB
-                    except:
+                    except Exception as e:
                         pass
             
             if free_mem and total_mem:
                 used_mem = total_mem - free_mem
                 mem_percent = (used_mem / total_mem) * 100
-        except:
+        except Exception as e:
             pass
     
     return {

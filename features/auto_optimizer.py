@@ -6,14 +6,7 @@ Tüm optimizasyonları tek tuşla uygular
 import subprocess
 import time
 from colorama import Fore, Style
-
-def run_silent(cmd):
-    """Komutu sessizce çalıştır"""
-    try:
-        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
-    except:
-        return False
+from features.safe_runner import run_silent
 
 def print_progress(step, total, message):
     """Progress bar göster"""

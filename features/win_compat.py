@@ -17,7 +17,7 @@ def is_wmic_available():
             timeout=2
         )
         return result.returncode == 0
-    except:
+    except Exception as e:
         return False
 
 def run_powershell(command, timeout=30):
@@ -34,7 +34,7 @@ def run_powershell(command, timeout=30):
             errors='ignore'
         )
         return result.stdout if result.returncode == 0 else None
-    except:
+    except Exception as e:
         return None
 
 # Global değişken
@@ -51,7 +51,7 @@ def get_cpu_info():
                 errors='ignore'
             )
             return output
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -69,7 +69,7 @@ def get_gpu_info():
                 errors='ignore'
             )
             return output
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -87,7 +87,7 @@ def get_monitor_refresh_rate():
                 errors='ignore'
             )
             return output
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -105,7 +105,7 @@ def get_startup_programs():
                 errors='ignore'
             )
             return output
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -124,7 +124,7 @@ def create_restore_point(description="AeroFPS_PRO_Backup"):
                 timeout=60
             )
             return result.returncode == 0
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi (daha güvenilir)
@@ -144,7 +144,7 @@ def set_process_priority(pid, priority="High"):
                 timeout=5
             )
             return result.returncode == 0
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -171,7 +171,7 @@ def get_cpu_temperature():
                     celsius = (int(line) / 10) - 273.15
                     temps.append(celsius)
             return temps if temps else None
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi (OpenHardwareMonitor gerekebilir)
@@ -187,7 +187,7 @@ def get_cpu_temperature():
                         celsius = (int(line) / 10) - 273.15
                         temps.append(celsius)
             return temps if temps else None
-        except:
+        except Exception as e:
             pass
     
     return None
@@ -207,7 +207,7 @@ def get_cpu_load():
                 line = line.strip()
                 if line and line.isdigit():
                     return int(line)
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
@@ -216,7 +216,7 @@ def get_cpu_load():
     if result:
         try:
             return int(result.strip())
-        except:
+        except Exception as e:
             pass
     
     return None
@@ -232,7 +232,7 @@ def get_memory_info():
                 errors='ignore'
             )
             return output
-        except:
+        except Exception as e:
             pass
     
     # PowerShell alternatifi
